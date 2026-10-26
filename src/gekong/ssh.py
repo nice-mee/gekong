@@ -172,7 +172,7 @@ def _pump(src, dst, log, on_broken=None):
                 dst.flush()
             except (BrokenPipeError, ValueError):
                 dst = None
-                if on_broken is not None:  # e.g. `gk run ... | head`: stop like SIGPIPE would
+                if on_broken is not None:  # e.g. `gekong run ... | head`: stop like SIGPIPE would
                     on_broken()
 
 

@@ -1,7 +1,9 @@
 """`gekong setup claude`: wire gekong into Claude Code (user scope).
 
 - ~/.claude/settings.json: the mirror as an additional working directory, the
-  file hooks, `gk` and the gekong search tools allowed, plain `ssh` kept on ask.
+  file hooks; the remote-work and read-only gekong commands and the gekong
+  search tools allowed; plain `ssh` and the gekong commands that log in, cut
+  connections, kill or reconfigure kept on ask.
 - MCP server `gekong` registered with `claude mcp add --scope user`.
 - The gekong skill symlinked to ~/.claude/skills/gekong.
 
@@ -25,8 +27,11 @@ from . import paths
 HOOK_MARK = "gekong-hook"
 PRE_MATCHER = "Read|Edit|Write|MultiEdit|NotebookEdit|Grep|Glob"
 POST_MATCHER = "Edit|Write|MultiEdit|NotebookEdit"
-ALLOW = ["Bash(gk:*)", "mcp__gekong__Grep", "mcp__gekong__Glob"]
-ASK = ["Bash(ssh:*)"]
+ALLOW = ["Bash(gekong run:*)", "Bash(gekong job:*)", "Bash(gekong wait:*)", "Bash(gekong ssh:*)",
+         "Bash(gekong status:*)", "Bash(gekong ps:*)", "Bash(gekong tail:*)",
+         "mcp__gekong__Grep", "mcp__gekong__Glob"]
+# `gekong up` may need 2FA and the skill says to hand it to the user; the rest change state.
+ASK = ["Bash(ssh:*)", "Bash(gekong up:*)", "Bash(gekong down:*)", "Bash(gekong kill:*)", "Bash(gekong setup:*)"]
 
 
 def claude_dir() -> Path:

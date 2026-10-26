@@ -10,7 +10,7 @@ import time
 
 import pytest
 
-from gekong import cli_gk, hooks, mirror, paths, runs, setup_claude, ssh
+from gekong import cli_remote, hooks, mirror, paths, runs, setup_claude, ssh
 from gekong.remote import helper
 
 
@@ -34,24 +34,24 @@ def test_mirror_path_mapping(home):
 
 
 def test_ssh_destination_parsing():
-    assert cli_gk.ssh_destination(["host", "ls"]) == (0, [])
-    assert cli_gk.ssh_destination(["-l", "me", "-p2222", "-t", "host", "ls", "-l"]) == (4, ["-l", "me", "-p", "2222"])
-    assert cli_gk.ssh_destination(["-o", "SendEnv=GIT_PROTOCOL", "host", "git-upload-pack"]) == (
+    assert cli_remote.ssh_destination(["host", "ls"]) == (0, [])
+    assert cli_remote.ssh_destination(["-l", "me", "-p2222", "-t", "host", "ls", "-l"]) == (4, ["-l", "me", "-p", "2222"])
+    assert cli_remote.ssh_destination(["-o", "SendEnv=GIT_PROTOCOL", "host", "git-upload-pack"]) == (
         2, ["-o", "SendEnv=GIT_PROTOCOL"])
-    assert cli_gk.ssh_destination(["-tt", "-i", "key", "--", "host"]) == (4, [])
-    assert cli_gk.ssh_destination(["-V"]) == (None, [])
+    assert cli_remote.ssh_destination(["-tt", "-i", "key", "--", "host"]) == (4, [])
+    assert cli_remote.ssh_destination(["-V"]) == (None, [])
 
 
 def test_split_command():
     flags = {"-C": "cwd", "--name": "name"}
-    assert cli_gk.split_command(["h", "ls", "-la"], flags) == ({}, "h", "ls -la")
-    assert cli_gk.split_command(["-C", "/x", "h", "make"], flags) == ({"cwd": "/x"}, "h", "make")
-    assert cli_gk.split_command(["h", "--name", "n", "-C", "/x", "run.sh"], flags) == (
+    assert cli_remote.split_command(["h", "ls", "-la"], flags) == ({}, "h", "ls -la")
+    assert cli_remote.split_command(["-C", "/x", "h", "make"], flags) == ({"cwd": "/x"}, "h", "make")
+    assert cli_remote.split_command(["h", "--name", "n", "-C", "/x", "run.sh"], flags) == (
         {"name": "n", "cwd": "/x"}, "h", "run.sh")
-    assert cli_gk.split_command(["--", "h", "-C", "x"], flags) == ({}, "h", "-C x")
+    assert cli_remote.split_command(["--", "h", "-C", "x"], flags) == ({}, "h", "-C x")
     for bad in ([], ["h"], ["-C"], ["-x", "h", "ls"]):
-        with pytest.raises(cli_gk.Usage):
-            cli_gk.split_command(bad, flags)
+        with pytest.raises(cli_remote.Usage):
+            cli_remote.split_command(bad, flags)
 
 
 def test_glob_regex():
@@ -98,9 +98,9 @@ def test_settings_merge_is_idempotent_and_reversible():
 
 
 def test_uninstall_keeps_permissions_the_user_already_had():
-    existing = {"permissions": {"allow": ["Bash(gk:*)"], "ask": ["Bash(ssh:*)"]}}
+    existing = {"permissions": {"allow": ["Bash(gekong run:*)"], "ask": ["Bash(ssh:*)"]}}
     merged, owned = setup_claude.merge(existing, "/bin/gekong-hook", "/m")
-    assert "Bash(gk:*)" not in owned["allow"] and "ask" not in owned
+    assert "Bash(gekong run:*)" not in owned["allow"] and "Bash(ssh:*)" not in owned["ask"]
     assert setup_claude.unmerge(merged, owned) == existing
 
 
@@ -142,7 +142,7 @@ def test_pinned_base_survives_until_its_write_back(home):
 
 
 def test_run_identity_uses_start_time(home):
-    run = runs.Run("h", ["gk", "run", "h", "true"])
+    run = runs.Run("h", ["gekong", "run", "h", "true"])
     meta = runs.find(run.id)
     assert meta["status"] == "running" and runs.same_process(meta)
     assert not runs.same_process({**meta, "pid_start": "Thu Jan  1 00:00:00 1970"})  # pid reused

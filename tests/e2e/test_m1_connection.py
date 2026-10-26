@@ -12,7 +12,7 @@ def test_up_status_down(env):
     r = env.run("gekong", "status")
     assert "connected" in r.stdout and "ms per call" in r.stdout
 
-    r = env.run("gk", "ssh", HOST, "echo", "hi from", "$HOSTNAME")
+    r = env.run("gekong", "ssh", HOST, "echo", "hi from", "$HOSTNAME")
     assert r.returncode == 0 and r.stdout.startswith("hi from"), r.stderr
 
     r = env.run("gekong", "down", HOST)
@@ -28,7 +28,7 @@ def test_up_is_idempotent(up):
 
 def test_never_logs_in_without_master(env):
     # The key would let ssh log in directly; gekong must refuse instead.
-    for argv in (["gk", "ssh", HOST, "true"], ["gk", "run", HOST, "true"]):
+    for argv in (["gekong", "ssh", HOST, "true"], ["gekong", "run", HOST, "true"]):
         r = env.run(*argv)
         assert r.returncode == 255, (argv, r.stdout, r.stderr)
         assert f"gekong up {HOST}" in r.stderr
@@ -38,12 +38,12 @@ def test_gk_ssh_with_rsync_and_user_flag(up, tmp_path):
     src = tmp_path / "src"
     src.mkdir()
     (src / "a.txt").write_text("alpha\n")
-    r = subprocess.run(["rsync", "-a", "-e", f"{BIN / 'gk'} ssh", f"{src}/", f"{HOST}:w/synced/"],
+    r = subprocess.run(["rsync", "-a", "-e", f"{BIN / 'gekong'} ssh", f"{src}/", f"{HOST}:w/synced/"],
                        capture_output=True, text=True, env=up.env, timeout=60)
     assert r.returncode == 0, r.stderr
     assert up.remote("cat ~/w/synced/a.txt") == "alpha\n"
     # `-l user host` lands on the same master as `host` (ControlPath uses %C).
-    r = up.run("gk", "ssh", "-l", "tester", HOST, "whoami")
+    r = up.run("gekong", "ssh", "-l", "tester", HOST, "whoami")
     assert r.stdout.strip() == "tester", r.stderr
 
 

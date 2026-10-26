@@ -25,7 +25,7 @@ def py36():
 
 def call(name, req, data=None, streaming=False):
     argv = ["docker", "exec", "-i", name, "sh", "-c", ssh.remote_cmd(req["op"])]
-    if streaming:  # keep stdin open like gk does: EOF means "local side gone"
+    if streaming:  # keep stdin open like gekong run does: EOF means "local side gone"
         p = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         p.stdin.write(ssh.payload(req))
         p.stdin.flush()

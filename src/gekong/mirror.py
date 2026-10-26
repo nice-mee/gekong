@@ -92,7 +92,7 @@ def pull(host: str, rpath: str):
         return f"{rpath} on {host} is not a regular file."
     if resp.get("too_large"):
         return (f"{rpath} on {host} is {_size_msg(resp)}. Search it with the gekong Grep tool, or print a "
-                f"line range with `gk run {host} \"sed -n '100,200p' {rpath}\"`.")
+                f"line range with `gekong run {host} \"sed -n '100,200p' {rpath}\"`.")
     if "data_len" in resp:
         _atomic_write(mpath, data)
     set_base(host, rpath, resp["sha"])

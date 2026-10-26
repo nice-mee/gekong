@@ -44,7 +44,7 @@ def claude(up, tmp_path, prompt):
             "--setting-sources", "project", "--settings", str(tmp_path / "settings.json"),
             "--mcp-config", str(tmp_path / "mcp.json"), "--strict-mcp-config", "--add-dir", mirror,
             "--permission-mode", "acceptEdits",
-            "--allowedTools", "Read", "Edit", "Write", "mcp__gekong__Grep", "mcp__gekong__Glob", "Bash(gk:*)",
+            "--allowedTools", "Read", "Edit", "Write", *setup_claude.ALLOW,
             "--output-format", "stream-json", "--verbose"]
     r = subprocess.run(argv, capture_output=True, text=True, env=up.env, cwd=tmp_path, timeout=600)
     events = [json.loads(l) for l in r.stdout.splitlines() if l.startswith("{")]

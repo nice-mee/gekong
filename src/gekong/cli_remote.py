@@ -1,20 +1,8 @@
-"""gk: run things on a remote host over its gekong master connection.
+"""`gekong ssh / run / job / wait`: work on a remote host over its master connection.
 
-  gk ssh [ssh options] HOST [COMMAND]       plain ssh reusing the master
-                                            (interactive shell, rsync -e 'gk ssh', GIT_SSH_COMMAND='gk ssh')
-  gk run [-C DIR] HOST COMMAND...           run a command; killing gk kills it on the remote too
-  gk job start [-C DIR] [--name NAME] HOST COMMAND...
-                                            start a long job in remote tmux (survives disconnects)
-  gk job ls HOST                            list jobs
-  gk job tail [-n N] [-f] HOST JOB          show a job's output (-f: follow until it ends)
-  gk job kill HOST JOB                      stop a job and its whole process group
-  gk wait HOST (--job JOB | --file PATH) [--pattern REGEX] [--timeout SEC] [--new]
-                                            block until a line matches (exit 0), the timeout passes (1)
-                                            or the job ends without a match (2); with --job and no
-                                            pattern, wait for the job and exit with its code
-
-HOST is always explicit, exactly as given to `gekong up`. COMMAND runs in the remote login
-shell; several words are joined with spaces, as ssh does.
+These commands take ssh-style or free-form arguments (a remote COMMAND may
+contain anything), so they are parsed here by hand rather than by argparse;
+cli_gekong.main hands them over before parsing the rest.
 """
 import argparse
 import os
@@ -114,24 +102,23 @@ def streamed(host, req, argv):
 
 def cmd_run(args):
     opts, host, cmd = split_command(args, {"-C": "cwd", "--cwd": "cwd"})
-    return streamed(host, {"op": "run", "cmd": cmd, "cwd": opts.get("cwd")}, ["gk", "run", *args])
+    return streamed(host, {"op": "run", "cmd": cmd, "cwd": opts.get("cwd")}, ["gekong", "run", *args])
 
 
 def cmd_job(args):
     if not args or args[0] in ("-h", "--help"):
-        print(__doc__)
-        return 0
+        raise Usage("expected start, ls, tail or kill")
     sub, rest = args[0], args[1:]
     if sub == "start":
         opts, host, cmd = split_command(rest, {"-C": "cwd", "--cwd": "cwd", "--name": "name"})
         resp, _ = ssh.call(host, {"op": "job_start", "cmd": cmd, "cwd": opts.get("cwd"), "name": opts.get("name")})
         jid = resp["id"]
         print(f"started job {jid} on {host} (tmux session {resp['session']}, log {resp['log']})")
-        print(f"  output:  gk job tail {host} {jid} [-f]")
-        print(f"  wait:    gk wait {host} --job {jid} [--pattern REGEX]")
-        print(f"  stop:    gk job kill {host} {jid}")
+        print(f"  output:  gekong job tail {host} {jid} [-f]")
+        print(f"  wait:    gekong wait {host} --job {jid} [--pattern REGEX]")
+        print(f"  stop:    gekong job kill {host} {jid}")
         return 0
-    p = argparse.ArgumentParser(prog=f"gk job {sub}")
+    p = argparse.ArgumentParser(prog=f"gekong job {sub}")
     p.add_argument("host")
     if sub == "ls":
         a = p.parse_args(rest)
@@ -154,7 +141,7 @@ def cmd_job(args):
         req = {"op": "job_tail", "job": a.job, "lines": a.lines, "follow": a.follow}
         host = paths.check_host(a.host)
         if a.follow:
-            return streamed(host, req, ["gk", "job", *args])
+            return streamed(host, req, ["gekong", "job", *args])
         return ssh.stream(host, req)
     if sub == "kill":
         a = p.parse_args(rest)
@@ -165,54 +152,34 @@ def cmd_job(args):
 
 
 def cmd_wait(args):
-    p = argparse.ArgumentParser(prog="gk wait")
+    p = argparse.ArgumentParser(prog="gekong wait")
     p.add_argument("host")
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--job")
     src.add_argument("--file")
     p.add_argument("--pattern")
     p.add_argument("--timeout", type=float)
-    p.add_argument("--new", action="store_true", help="only match lines written after gk wait starts")
+    p.add_argument("--new", action="store_true", help="only match lines written after gekong wait starts")
     a = p.parse_args(args)
     if a.file and not a.pattern:
         raise Usage("--file needs --pattern")
     req = {"op": "wait", "job": a.job, "file": a.file, "pattern": a.pattern, "timeout": a.timeout, "new": a.new}
-    return streamed(paths.check_host(a.host), req, ["gk", "wait", *args])
+    return streamed(paths.check_host(a.host), req, ["gekong", "wait", *args])
 
 
 COMMANDS = {"ssh": cmd_ssh, "run": cmd_run, "job": cmd_job, "wait": cmd_wait}
 
 
-def main(argv=None):
-    args = sys.argv[1:] if argv is None else argv
-    if not args or args[0] in ("-h", "--help", "help"):
-        print(__doc__)
-        return 0
-    fn = COMMANDS.get(args[0])
-    if fn is None:
-        print(f"gk: unknown command {args[0]!r}\n{__doc__}", file=sys.stderr)
-        return 2
+def main(args) -> int:
+    """Run one of COMMANDS: args[0] is its name."""
     try:
-        return fn(args[1:])
+        return COMMANDS[args[0]](args[1:])
     except Usage as e:
-        print(f"gk {args[0]}: {e}\n{__doc__}", file=sys.stderr)
+        print(f"gekong {args[0]}: {e} (see `gekong --help`)", file=sys.stderr)
         return 2
     except ssh.GekongError as e:
         print(e, file=sys.stderr)
         return e.exit_code
     except ValueError as e:
-        print(f"gk: {e}", file=sys.stderr)
+        print(f"gekong: {e}", file=sys.stderr)
         return 2
-
-
-def entry():
-    rc = main()
-    try:
-        sys.stdout.flush()
-    except BrokenPipeError:  # reader went away (`gk run ... | head`); don't print a traceback
-        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
-    sys.exit(rc)
-
-
-if __name__ == "__main__":
-    entry()

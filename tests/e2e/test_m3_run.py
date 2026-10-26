@@ -1,4 +1,4 @@
-"""M3: gk run is an ordinary local process whose death takes the remote process group with it."""
+"""M3: gekong run is an ordinary local process whose death takes the remote process group with it."""
 import os
 import signal
 import subprocess
@@ -24,17 +24,17 @@ def wait_until(pred, timeout=15):
 
 
 def test_streams_separate_and_exit_code(up):
-    r = up.run("gk", "run", HOST, "echo out; echo err >&2; exit 3")
+    r = up.run("gekong", "run", HOST, "echo out; echo err >&2; exit 3")
     assert (r.returncode, r.stdout, r.stderr) == (3, "out\n", "err\n")
 
-    r = up.run("gk", "run", "-C", "/etc", HOST, "pwd")
+    r = up.run("gekong", "run", "-C", "/etc", HOST, "pwd")
     assert r.stdout == "/etc\n"
-    r = up.run("gk", "run", HOST, "echo", "several", "words")
+    r = up.run("gekong", "run", HOST, "echo", "several", "words")
     assert r.stdout == "several words\n"
 
 
 def test_output_streams_before_exit(up):
-    p = up.popen("gk", "run", HOST, "echo first; sleep 3; echo second", stdout=subprocess.PIPE, text=True)
+    p = up.popen("gekong", "run", HOST, "echo first; sleep 3; echo second", stdout=subprocess.PIPE, text=True)
     t0 = time.time()
     assert p.stdout.readline() == "first\n"
     assert time.time() - t0 < 2.5
@@ -44,14 +44,14 @@ def test_output_streams_before_exit(up):
 
 def test_leftover_background_processes_do_not_hang(up):
     t0 = time.time()
-    r = up.run("gk", "run", HOST, "sleep 471 & echo started", timeout=20)
+    r = up.run("gekong", "run", HOST, "sleep 471 & echo started", timeout=20)
     assert r.stdout == "started\n" and time.time() - t0 < 5
     assert wait_until(lambda: not remote_procs(up, "sleep 471"))
 
 
 def test_closed_stdout_stops_remote(up):
-    gk = subprocess.list2cmdline([str(BIN / "gk"), "run", HOST, "yes"])
-    r = subprocess.run(f"{gk} | head -1", shell=True, capture_output=True, text=True, env=up.env, timeout=30)
+    cmd = subprocess.list2cmdline([str(BIN / "gekong"), "run", HOST, "yes"])
+    r = subprocess.run(f"{cmd} | head -1", shell=True, capture_output=True, text=True, env=up.env, timeout=30)
     assert r.stdout == "y\n" and "Traceback" not in r.stderr
     assert wait_until(lambda: not remote_procs(up, "yes"))
 
@@ -59,7 +59,7 @@ def test_closed_stdout_stops_remote(up):
 @pytest.mark.parametrize("how", ["sigterm", "sigint", "sigkill", "tree"])
 def test_killing_gk_kills_remote_group(up, how):
     marker = {"sigterm": 472, "sigint": 473, "sigkill": 474, "tree": 475}[how]
-    p = up.popen("gk", "run", HOST, f"sleep {marker}0 & sleep {marker}1; echo never",
+    p = up.popen("gekong", "run", HOST, f"sleep {marker}0 & sleep {marker}1; echo never",
                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     assert wait_until(lambda: len(remote_procs(up, f"sleep {marker}[01]")) == 2)
     if how == "tree":  # what an agent's kill of a background command does
@@ -74,7 +74,7 @@ def test_killing_gk_kills_remote_group(up, how):
 
 
 def test_ps_tail_kill(up):
-    p = up.popen("gk", "run", HOST, "echo hello-ps; sleep 4760", stdout=subprocess.DEVNULL)
+    p = up.popen("gekong", "run", HOST, "echo hello-ps; sleep 4760", stdout=subprocess.DEVNULL)
     assert wait_until(lambda: "sleep 4760" in up.run("gekong", "ps").stdout)
     run_id = next(l.split()[0] for l in up.run("gekong", "ps").stdout.splitlines() if "4760" in l)
     assert wait_until(lambda: "hello-ps" in up.run("gekong", "tail", run_id).stdout)
@@ -95,7 +95,7 @@ def test_rc_files_sourced_once_and_skippable_for_file_calls(up):
         up.root(f"""printf '%s\\n' '[[ $BASH_EXECUTION_STRING == *gekong:call* ]] && return' \
                     'echo sourced >> ~/w/rc-count' > {rc} && rm -f /home/tester/w/rc-count""")
         count = lambda: len(up.root("cat /home/tester/w/rc-count 2>/dev/null || true").split())
-        r = up.run("gk", "run", HOST, "echo $SHLVL")
+        r = up.run("gekong", "run", HOST, "echo $SHLVL")
         assert r.returncode == 0 and count() == 1, r.stderr
         up.root("echo hi > /home/tester/w/f.txt && chown tester /home/tester/w/f.txt")
         mp = up.mirror("/home/tester/w/f.txt")

@@ -6,8 +6,7 @@ requires-python = ">=3.10"
 dependencies = ["mcp>=1.10"]
 
 [project.scripts]
-gekong = "gekong.cli_gekong:main"
-gk = "gekong.cli_gk:entry"
+gekong = "gekong.cli_gekong:entry"
 gekong-mcp = "gekong.mcp_server:main"
 gekong-hook = "gekong.hooks:main"
 

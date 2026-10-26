@@ -610,7 +610,7 @@ def op_run(req):
             child = subprocess.Popen([user_shell(), "-c", req["cmd"]], stdin=devnull,
                                      cwd=cwd, env=command_env(), start_new_session=True)
     except OSError as e:
-        sys.stderr.write("gk: cannot start command: %s\n" % e)
+        sys.stderr.write("gekong run: cannot start command: %s\n" % e)
         return 127
     while child.poll() is None:
         if stop or stdin_closed(0.2):
@@ -626,6 +626,7 @@ def op_run(req):
 # ---------------------------------------------------------------- jobs
 
 
+SESSION = "gekong-"  # tmux session name prefix for jobs
 ENV_SKIP = ("TMUX", "TMUX_PANE", "_", "PWD", "OLDPWD")
 
 
@@ -661,7 +662,7 @@ def resolve_job(ref):
         if m.get("name") == ref:
             named.append((m.get("started", 0), jid))
     if not named:
-        raise UserError("no job %r on this host (see `gk job ls`)" % ref)
+        raise UserError("no job %r on this host (see `gekong job ls`)" % ref)
     return max(named)[1]
 
 
@@ -676,13 +677,13 @@ def job_status(jid):
         if code == "killed":
             return "killed", None
         return "exited", int(code) if code.lstrip("-").isdigit() else None
-    rc, _, _ = tmux("has-session", "-t", "gk-" + jid)
+    rc, _, _ = tmux("has-session", "-t", SESSION + jid)
     return ("running", None) if rc == 0 else ("lost", None)
 
 
 def op_job_start(req):
     if not shutil.which("tmux"):
-        raise UserError("tmux is not installed on the remote host; gk job needs it")
+        raise UserError("tmux is not installed on the remote host; gekong job needs it")
     root = jobs_root()
     jid = rand_id()
     d = os.path.join(root, jid)
@@ -696,7 +697,7 @@ def op_job_start(req):
     script = "\n".join([
         "#!/bin/sh",
         "\n".join(exports),
-        "cd %s || { echo 'gk: cannot cd to %s' > %s; echo 1 > %s; exit 1; }"
+        "cd %s || { echo 'gekong job: cannot cd to %s' > %s; echo 1 > %s; exit 1; }"
         % (shquote(cwd), cwd.replace("'", ""), q("log"), q("exit")),
         '%s -c "$(cat %s)" < /dev/null > %s 2>&1' % (shquote(user_shell()), q("cmd"), q("log")),
         "echo $? > %s && mv %s %s" % (q("exit.tmp"), q("exit.tmp"), q("exit")),
@@ -707,11 +708,11 @@ def op_job_start(req):
     meta = {"id": jid, "name": req.get("name"), "cmd": req["cmd"], "cwd": cwd, "started": time.time()}
     with open(os.path.join(d, "meta.json"), "w") as f:
         json.dump(meta, f)
-    rc, _, err = tmux("new-session", "-d", "-s", "gk-" + jid, "sh " + q("job.sh"))
+    rc, _, err = tmux("new-session", "-d", "-s", SESSION + jid, "sh " + q("job.sh"))
     if rc != 0:
         shutil.rmtree(d, ignore_errors=True)
         raise UserError("tmux new-session failed: %s" % err.strip())
-    reply({"ok": True, "id": jid, "session": "gk-" + jid, "log": os.path.join(d, "log")})
+    reply({"ok": True, "id": jid, "session": SESSION + jid, "log": os.path.join(d, "log")})
 
 
 def op_job_ls(req):
@@ -733,10 +734,10 @@ def op_job_kill(req):
     jid = resolve_job(req["job"])
     status, _ = job_status(jid)
     if status == "running":
-        rc, out, _ = tmux("list-panes", "-t", "gk-" + jid, "-F", "#{pane_pid}")
+        rc, out, _ = tmux("list-panes", "-t", SESSION + jid, "-F", "#{pane_pid}")
         for pid in out.split():
             kill_group(int(pid))
-        tmux("kill-session", "-t", "gk-" + jid)
+        tmux("kill-session", "-t", SESSION + jid)
         exit_path = os.path.join(jobs_root(), jid, "exit")
         if not os.path.exists(exit_path):
             with open(exit_path, "w") as f:
@@ -814,10 +815,10 @@ def op_wait(req):
     elif req.get("file"):
         path = expand(req["file"])
     else:
-        raise UserError("gk wait needs --job or --file")
+        raise UserError("gekong wait needs --job or --file")
     rx = re.compile(req["pattern"]) if req.get("pattern") else None
     if rx is None and not jid:
-        raise UserError("gk wait --file needs --pattern")
+        raise UserError("gekong wait --file needs --pattern")
     deadline = time.time() + float(req["timeout"]) if req.get("timeout") else None
     f = None
     pos = None
@@ -857,10 +858,10 @@ def op_wait(req):
                         OUT.write(partial + b"\n")
                         OUT.flush()
                         return 0
-                    sys.stderr.write("gk wait: job %s ended (exit %s) without a match\n" % (jid, code))
+                    sys.stderr.write("gekong wait: job %s ended (exit %s) without a match\n" % (jid, code))
                     return 2
             if deadline is not None and time.time() > deadline:
-                sys.stderr.write("gk wait: timed out after %ss\n" % req["timeout"])
+                sys.stderr.write("gekong wait: timed out after %ss\n" % req["timeout"])
                 return 1
             if stdin_closed(0.5):
                 return 130
@@ -899,14 +900,14 @@ def main():
         rc = fn(req)
     except UserError as e:
         if streaming:
-            sys.stderr.write("gk: %s\n" % e)
+            sys.stderr.write("gekong: %s\n" % e)
             rc = 2
         else:
             reply({"ok": False, "kind": "error", "error": str(e)})
             rc = 0
     except (OSError, ValueError, KeyError) as e:
         if streaming:
-            sys.stderr.write("gk: %s: %s\n" % (type(e).__name__, e))
+            sys.stderr.write("gekong: %s: %s\n" % (type(e).__name__, e))
             rc = 2
         else:
             reply({"ok": False, "kind": "error", "error": "%s: %s" % (type(e).__name__, e)})

@@ -1,7 +1,8 @@
-"""Local registry of long-running gk commands, for `gekong ps / tail / kill`.
+"""Local registry of the long-running remote commands (`gekong run`, `wait`,
+`job tail -f`), for `gekong ps / tail / kill`.
 
-Each run gets ~/.gekong/runs/<id>/ with meta.json and out.log; gk writes both
-itself, so there is no daemon.
+Each run gets ~/.gekong/runs/<id>/ with meta.json and out.log; the command writes
+both itself, so there is no daemon.
 """
 import json
 import os
@@ -65,7 +66,7 @@ def proc_start(pid: int):
 
 
 def same_process(meta: dict) -> bool:
-    """Is the recorded gk still the process with that pid (not a reuse of the pid)?"""
+    """Is the recorded command still the process with that pid (not a reuse of the pid)?"""
     start = proc_start(meta["pid"])
     return start is not None and start == meta.get("pid_start")
 

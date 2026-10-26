@@ -1,15 +1,39 @@
-"""gekong: manage master connections and the commands running over them.
+"""gekong: work on remote hosts over one OpenSSH master connection each.
 
+Connections
   gekong up HOST              log in once (2FA etc.) and keep a master connection
   gekong down HOST | --all    close master connections
   gekong status [HOST]        show connections
-  gekong ps [-a] [HOST]       list gk commands started by agents (-a: include finished ones)
-  gekong tail [-n N] [-f] ID  show a gk command's output
-  gekong kill ID              stop a gk command (its remote process group goes with it)
+
+Remote work
+  gekong run [-C DIR] HOST COMMAND...
+                              run a command; killing gekong kills it on the remote too
+  gekong job start [-C DIR] [--name NAME] HOST COMMAND...
+                              start a long job in remote tmux (survives disconnects)
+  gekong job ls HOST          list jobs
+  gekong job tail [-n N] [-f] HOST JOB
+                              show a job's output (-f: follow until it ends)
+  gekong job kill HOST JOB    stop a job and its whole process group
+  gekong wait HOST (--job JOB | --file PATH) [--pattern REGEX] [--timeout SEC] [--new]
+                              block until a line matches (exit 0), the timeout passes (1)
+                              or the job ends without a match (2); with --job and no
+                              pattern, wait for the job and exit with its code
+  gekong ssh [ssh options] HOST [COMMAND]
+                              plain ssh reusing the master: interactive shell,
+                              rsync -e 'gekong ssh', GIT_SSH_COMMAND='gekong ssh'
+
+Commands started by agents
+  gekong ps [-a] [HOST]       list running run/wait/tail commands (-a: include finished ones)
+  gekong tail [-n N] [-f] ID  show one's output
+  gekong kill ID              stop one (its remote process group goes with it)
+
+Setup
   gekong setup claude [--dry-run | --uninstall]
                               install hooks, permissions, MCP server and skill into Claude Code
 
-HOST is passed to ssh verbatim: an ~/.ssh/config alias or user@hostname.
+HOST is passed to ssh verbatim (an ~/.ssh/config alias or user@hostname) and is
+always explicit. A remote COMMAND runs in the remote login shell; several words
+are joined with spaces, as ssh does.
 """
 import argparse
 import json
@@ -19,7 +43,7 @@ import subprocess
 import sys
 import time
 
-from . import paths, runs, ssh
+from . import cli_remote, paths, runs, ssh
 
 
 def _record(host: str):
@@ -127,7 +151,7 @@ def cmd_ps(a) -> int:
     rows = [m for m in runs.load_all()
             if (a.all or m["status"] == "running") and (not a.host or m["host"] == a.host)]
     if not rows:
-        print("gekong: no running gk commands" + ("" if a.all else " (-a shows finished ones)"))
+        print("gekong: no running commands" + ("" if a.all else " (-a shows finished ones)"))
         return 0
     print(f"{'ID':<7} {'HOST':<18} {'STATUS':<10} {'AGE':>5}  COMMAND")
     for m in rows:
@@ -140,7 +164,7 @@ def _find(run_id: str) -> dict:
     try:
         return runs.find(run_id)
     except KeyError:
-        raise SystemExit(f"gekong: no gk command with id {run_id!r} (see `gekong ps -a`)")
+        raise SystemExit(f"gekong: no command with id {run_id!r} (see `gekong ps -a`)")
 
 
 def cmd_tail(a) -> int:
@@ -171,7 +195,7 @@ def cmd_kill(a) -> int:
         print(f"gekong: {a.id} is not running ({m['status']})")
         return 0
     if not runs.same_process(m):
-        print(f"gekong: pid {m['pid']} is no longer the gk command; not killing it", file=sys.stderr)
+        print(f"gekong: pid {m['pid']} is no longer that command; not killing it", file=sys.stderr)
         return 1
     os.kill(m["pid"], signal.SIGTERM)
     for _ in range(100):
@@ -205,16 +229,19 @@ def parser() -> argparse.ArgumentParser:
     s = sub.add_parser("status", help="show connections")
     s.add_argument("host", nargs="?")
     s.set_defaults(fn=cmd_status)
-    s = sub.add_parser("ps", help="list gk commands")
+    for name, what in (("run", "run a command"), ("job", "long jobs in remote tmux"),
+                       ("wait", "wait for a log line or a job"), ("ssh", "ssh reusing the master")):
+        sub.add_parser(name, help=what, add_help=False)  # parsed by cli_remote; listed for --help
+    s = sub.add_parser("ps", help="list commands started by agents")
     s.add_argument("host", nargs="?")
     s.add_argument("-a", "--all", action="store_true")
     s.set_defaults(fn=cmd_ps)
-    s = sub.add_parser("tail", help="show a gk command's output")
+    s = sub.add_parser("tail", help="show a command's output")
     s.add_argument("id")
     s.add_argument("-n", type=int, default=50, dest="lines")
     s.add_argument("-f", action="store_true", dest="follow")
     s.set_defaults(fn=cmd_tail)
-    s = sub.add_parser("kill", help="stop a gk command")
+    s = sub.add_parser("kill", help="stop a command")
     s.add_argument("id")
     s.set_defaults(fn=cmd_kill)
     s = sub.add_parser("setup", help="integrate with an agent")
@@ -227,7 +254,10 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main(argv=None) -> int:
-    a = parser().parse_args(argv)
+    args = sys.argv[1:] if argv is None else argv
+    if args and args[0] in cli_remote.COMMANDS:
+        return cli_remote.main(args)
+    a = parser().parse_args(args)
     try:
         return a.fn(a)
     except ssh.GekongError as e:
@@ -240,5 +270,14 @@ def main(argv=None) -> int:
         return 130
 
 
+def entry():
+    rc = main()
+    try:
+        sys.stdout.flush()
+    except BrokenPipeError:  # reader went away (`gekong run ... | head`); don't print a traceback
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+    sys.exit(rc)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    entry()

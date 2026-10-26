@@ -19,7 +19,7 @@ def instructions() -> str:
 - Search remote files only with this server's Grep and Glob, always passing host. Never use native Grep/Glob, ls or find on the mirror: it only holds files that were already read. Results come back as mirror paths you can Read directly.
 - Grep first, then Read just the lines you need (offset/limit) instead of whole large files.
 - If Grep/Glob output is truncated, the marker names a file with the full output: Grep it or Read a range of it instead of re-running the search.
-- Run remote commands with the `gk` CLI through Bash (see the gekong skill), never with ssh. The host is always explicit: take it from the user or the context, never guess."""
+- Run remote commands with `gekong run` / `gekong job` through Bash (see the gekong skill), never with ssh. The host is always explicit: take it from the user or the context, never guess."""
 
 
 HOST = {"type": "string", "description": "Remote host, exactly as given to `gekong up` (an ~/.ssh/config alias or user@hostname). Required; never guess."}
