@@ -1,0 +1,26 @@
+[project]
+name = "gekong"
+version = "0.1.0"
+description = "Remote toolkit for coding agents on top of OpenSSH connection multiplexing"
+requires-python = ">=3.10"
+dependencies = ["mcp>=1.10"]
+
+[project.scripts]
+gekong = "gekong.cli_gekong:main"
+gk = "gekong.cli_gk:entry"
+gekong-mcp = "gekong.mcp_server:main"
+gekong-hook = "gekong.hooks:main"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gekong"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["e2e: needs Docker; starts an sshd container"]
