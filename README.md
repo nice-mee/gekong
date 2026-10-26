@@ -30,6 +30,9 @@ as if they were local, with nothing to install on the remote.
 
 ---
 
+> [!WARNING]
+> gekong was vibe-coded in an afternoon for my own use. It works for me, but it hasn't been battle-tested, and it hands an agent a shell on your remote machines. Use it with care, and read [Security & disclaimer](#-security--disclaimer) first.
+
 ## ✨ Highlights
 
 |  |  |
@@ -76,7 +79,7 @@ gekong setup claude              # hooks, permissions, mirror directory, MCP ser
 
 ## 🔒 Security & disclaimer
 
-gekong is early (0.1.0) and experimental. Read this before pointing it at machines you care about.
+gekong is an early (0.1.0), experimental personal tool. Read this before pointing it at machines you care about.
 
 - **The agent gets a shell on your hosts.** After `gekong setup claude`, Claude Code can run any command on a connected host through `gekong run` / `gekong job` without asking, with your privileges there. Only connect hosts you're willing to hand to an agent, and take extra care on shared clusters.
 - **A connection stays open until you close it.** `gekong up` keeps the SSH master alive with no timeout. While it's up, anything running as your local user can use it without going through 2FA again. Run `gekong down` (or `gekong down --all`) when you're done.
