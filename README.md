@@ -1,51 +1,51 @@
 # gekong
 
-建立在 OpenSSH 连接复用之上的远端工具集：登录一次，Claude Code 就能用原生 Read / Edit / Write 读写远端文件，用 MCP 的 Grep / Glob 在远端搜索，用 `gk` 执行远端命令。结束本地命令时，远端进程组会一起结束。远端只需要 python3（≥ 3.6），不安装任何东西。设计见《gekong 设计文档》。
+A remote toolkit for coding agents, built on OpenSSH connection multiplexing. Log in once, and Claude Code reads and edits remote files with its native Read / Edit / Write, searches the remote with MCP Grep / Glob, and runs remote commands with `gekong run`. Stopping a local command stops its remote process group too. The remote only needs python3 (>= 3.6); nothing is installed there. See the gekong design doc for the reasoning behind it.
 
-## 安装
+## Install
 
 ```bash
-uv tool install --editable .     # gekong, gk, gekong-mcp, gekong-hook -> ~/.local/bin
-gekong setup claude              # hooks、权限、镜像目录、MCP server、skill（会先备份 settings.json）
-gekong setup claude --dry-run    # 只打印将要写入的 settings.json
-gekong setup claude --uninstall
+uv tool install --editable .     # gekong, gekong-mcp, gekong-hook -> ~/.local/bin
+gekong setup claude              # hooks, permissions, mirror directory, MCP server, skill (backs up settings.json first)
+gekong setup claude --dry-run    # print the settings.json it would write
+gekong setup claude --uninstall  # remove only what setup added
 ```
 
-如果 zsh 用了 oh-my-zsh 的 git 插件，需要在插件加载之后 `unalias gk`。
+Setup pre-approves the subcommands agents work with and the read-only ones (`gekong run / job / wait / ssh / status / ps / tail`). `gekong up / down / kill / setup` and plain `ssh` still ask you first.
 
-## 使用
+## Use
 
 ```bash
-gekong up gpu1                   # 在终端完成 2FA 等认证；之后的调用都复用这条连接
+gekong up gpu1                   # log in once in your terminal (2FA etc.); every later call reuses it
 gekong status
-gk run gpu1 'nvidia-smi'
-gk job start --name train gpu1 'python train.py'
-gk wait gpu1 --job train --pattern 'epoch 5/'
-gk ssh gpu1                      # 交互式 shell；也可用于 rsync -e 'gk ssh'、GIT_SSH_COMMAND='gk ssh'
-gekong ps / tail ID / kill ID    # 查看或结束 agent 正在跑的 gk 命令
+gekong run gpu1 'nvidia-smi'
+gekong job start --name train gpu1 'python train.py'
+gekong wait gpu1 --job train --pattern 'epoch 5/'
+gekong ssh gpu1                  # interactive shell; also rsync -e 'gekong ssh', GIT_SSH_COMMAND='gekong ssh'
+gekong ps / tail ID / kill ID    # see or stop the commands agents are running
 gekong down gpu1
 ```
 
-远端文件 `/abs/path` 对应的本地路径是 `~/.gekong/mirror/<host>/abs/path`。
+A remote file `/abs/path` is at `~/.gekong/mirror/<host>/abs/path` locally.
 
-- Read 之前，hook 会拉取最新版本。
-- Edit / Write 之后，hook 会以 compare-and-swap 的方式原子回写远端。
-- 如果远端在模型读取之后被改过，编辑会被拒绝，模型需要重新 Read。
+- Before a Read, a hook pulls the latest version.
+- After an Edit / Write, a hook writes it back to the remote atomically, as a compare-and-swap.
+- If the remote changed since the model read it, the edit is refused and the model reads it again.
 
-## 远端 shell 启动很慢时
+## Slow remote shells
 
-每次调用都会经过远端的登录 shell，sshd 会让它加载 `~/.bashrc`。在 HPC 登录节点上，`/etc/profile.d` 里的脚本可能要一两秒，这时 `gekong status` 显示的每次调用耗时会超过 1 秒。可以在远端 `~/.bashrc` 最顶上加一行：
+Every call goes through the remote login shell, and sshd makes it source `~/.bashrc`. On HPC login nodes the `/etc/profile.d` scripts can take a second or two; `gekong status` then reports more than 1 s per call. Put this line at the very top of the remote `~/.bashrc`:
 
 ```bash
-[[ $BASH_EXECUTION_STRING == *gekong:call* ]] && return   # gekong 的文件读写和搜索不需要环境初始化
+[[ $BASH_EXECUTION_STRING == *gekong:call* ]] && return   # gekong's file reads, writes and searches need no setup
 ```
 
-文件读写和搜索的命令行带 `gekong:call` 标记，会跳过 rc 文件。`gk run` / `gk job` 带的是 `gekong:run`，仍然完整加载环境，module 等照常可用。rc 文件每条命令只加载一次。
+File reads, writes and searches are tagged `gekong:call` and skip the rc file. `gekong run` / `gekong job` are tagged `gekong:run` and still load the full environment, so `module` and the like work as usual. Either way the rc file is sourced at most once per command.
 
-## 测试
+## Tests
 
 ```bash
-uv run pytest tests/unit                          # 不需要 Docker
-uv run pytest                                     # 还会起一个 sshd 容器做端到端测试，并跑 python 3.6 兼容测试
-GEKONG_CLAUDE_SMOKE=1 uv run pytest tests/e2e/test_claude_smoke.py -s   # 用真实的 claude -p（消耗 token）
+uv run pytest tests/unit                          # no Docker needed
+uv run pytest                                     # also starts an sshd container for end-to-end tests, and a python 3.6 test
+GEKONG_CLAUDE_SMOKE=1 uv run pytest tests/e2e/test_claude_smoke.py -s   # real `claude -p` (spends tokens)
 ```
