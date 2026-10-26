@@ -50,7 +50,7 @@ Every call is a fresh login, and an agent can't type a 2FA code. It ends up edit
 The agent's Grep / Glob would walk the whole tree over the wire, including datasets and checkpoints. Edits land blindly on whatever is there, and a dropped link can wedge the mount. gekong runs searches on the remote, only pulls files the agent actually reads, and writes back with compare-and-swap, so it never overwrites a change made behind its back.
 
 **…sync the project with rsync / mutagen?**
-Then you have two copies that drift. Outputs, logs and big files live on the remote, and each sync either misses them or drags them over. With gekong the remote stays the single source of truth; the mirror is just a cache of the files the agent has read.
+Every rsync opens a new SSH connection, so on a 2FA host each sync means another code from your phone, and an agent can't sync on its own at all. You also end up with two copies that drift. Outputs, logs and big files live on the remote, and each sync either misses them or drags them over. With gekong the remote stays the single source of truth; the mirror is just a cache of the files the agent has read. When you do want rsync, `rsync -e 'gekong ssh'` reuses gekong's login, with no extra 2FA.
 
 **…run Claude Code on the remote itself?**
 You'd install it and put your credentials on a machine you may share with others, often a login node. You'd also leave your local settings, MCP servers and skills behind. And you'd need one session per host. gekong keeps one local agent that can work on several hosts, and leaves nothing behind on them.
