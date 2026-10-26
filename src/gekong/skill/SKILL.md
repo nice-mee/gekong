@@ -60,5 +60,6 @@ gekong job kill HOST train
 - `--file PATH --pattern RE` waits on any remote log file instead of a job.
 
 Copying files and git: `rsync -e 'gekong ssh' -a src/ HOST:dst/`, and
-`GIT_SSH_COMMAND='gekong ssh' git ...`. For an interactive look at a job:
+`GIT_SSH_COMMAND='gekong ssh' git ...` (`gekong ssh` asks the user first, like plain `ssh`;
+prefer `gekong run` for commands). For an interactive look at a job:
 `gekong ssh -t HOST tmux attach -t gekong-<job id>` (the user does this, not you).

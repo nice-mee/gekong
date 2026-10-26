@@ -13,14 +13,18 @@ as if they were local, with nothing to install on the remote.
 ![Remote](https://img.shields.io/badge/remote-python3%20%E2%89%A5%203.6-4B8BBE)
 ![OpenSSH](https://img.shields.io/badge/transport-OpenSSH%20ControlMaster-231F20?logo=openssh&logoColor=white)
 ![Claude Code](https://img.shields.io/badge/works%20with-Claude%20Code-D97757)
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Status](https://img.shields.io/badge/status-experimental-orange)
 
 <br>
 
 <img src="docs/demo.svg" width="880" alt="Demo: log in to gpu1 once with gekong up, then Claude Code searches, reads and edits remote files through the mirror and runs a training job with gekong job and gekong wait">
 
+<sub>The terminal output is real gekong output; the Claude Code session is an illustration.</sub>
+
 <br>
 
-[Why not …?](#-why-not-) · [Install](#-install) · [Quick start](#-quick-start) · [How it works](#-how-it-works) · [Commands](#-commands) · [Slow shells](#-slow-remote-shells) · [Tests](#-tests)
+[Why not …?](#-why-not-) · [Install](#-install) · [Security](#-security--disclaimer) · [Quick start](#-quick-start) · [How it works](#-how-it-works) · [Commands](#-commands) · [Slow shells](#-slow-remote-shells) · [Tests](#-tests)
 
 </div>
 
@@ -66,8 +70,22 @@ gekong setup claude              # hooks, permissions, mirror directory, MCP ser
 | `--uninstall` | Remove only what setup added |
 
 **Permissions.** Setup pre-approves the subcommands agents work with and the read-only ones:
-`gekong run` · `job` · `wait` · `ssh` · `status` · `ps` · `tail`.
-`gekong up` · `down` · `kill` · `setup` and plain `ssh` still ask you first.
+`gekong run` · `job` · `wait` · `status` · `ps` · `tail`.
+`gekong up` · `down` · `kill` · `setup`, plain `ssh` and `gekong ssh` still ask you first.
+`gekong ssh` passes any ssh option through, port forwards included, so it gets the same treatment as `ssh`.
+
+## 🔒 Security & disclaimer
+
+gekong is early (0.1.0) and experimental. Read this before pointing it at machines you care about.
+
+- **The agent gets a shell on your hosts.** After `gekong setup claude`, Claude Code can run any command on a connected host through `gekong run` / `gekong job` without asking, with your privileges there. Only connect hosts you're willing to hand to an agent, and take extra care on shared clusters.
+- **A connection stays open until you close it.** `gekong up` keeps the SSH master alive with no timeout. While it's up, anything running as your local user can use it without going through 2FA again. Run `gekong down` (or `gekong down --all`) when you're done.
+- **Remote files are copied to your machine.** Every file the agent reads is cached in plain text under `~/.gekong/mirror` and isn't cleaned up automatically. Mind secrets, `.env` files and restricted data.
+- **Edits aren't backed up.** Write-back is compare-and-swap, so it won't clobber a concurrent change, but nothing keeps old versions. Keep important work in git.
+- **Check your site's rules.** Some clusters and employers don't allow persistent or multiplexed SSH connections, or heavy work on login nodes (`gekong job` runs on whatever host you connected to). Following their acceptable-use policy is up to you.
+- **Platforms.** Local: macOS and Linux, since gekong relies on OpenSSH connection multiplexing, which the Windows build of OpenSSH lacks. Remote: Linux with python3 ≥ 3.6.
+
+gekong is provided as is, without warranty of any kind; see [LICENSE](LICENSE).
 
 ## 🚀 Quick start
 
@@ -159,3 +177,7 @@ uv run pytest tests/unit                                                # no Doc
 uv run pytest                                                           # + sshd container e2e tests and a python 3.6 test
 GEKONG_CLAUDE_SMOKE=1 uv run pytest tests/e2e/test_claude_smoke.py -s   # real `claude -p` (spends tokens)
 ```
+
+---
+
+<sub>[MIT](LICENSE) © 2026 Chiming NI. gekong is an independent project, not affiliated with or endorsed by Anthropic. Claude and Claude Code are trademarks of Anthropic.</sub>

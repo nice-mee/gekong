@@ -3,6 +3,9 @@ name = "gekong"
 version = "0.1.0"
 description = "Remote toolkit for coding agents on top of OpenSSH connection multiplexing"
 requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Chiming NI" }]
 dependencies = ["mcp>=1.10"]
 
 [project.scripts]

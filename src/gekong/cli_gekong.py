@@ -255,7 +255,10 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv=None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if args and args[0] in cli_remote.COMMANDS:
+    if not args:
+        parser().print_help()
+        return 0
+    if args[0] in cli_remote.COMMANDS:
         return cli_remote.main(args)
     a = parser().parse_args(args)
     try:

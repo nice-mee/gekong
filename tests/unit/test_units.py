@@ -10,7 +10,7 @@ import time
 
 import pytest
 
-from gekong import cli_remote, hooks, mirror, paths, runs, setup_claude, ssh
+from gekong import cli_gekong, cli_remote, hooks, mirror, paths, runs, setup_claude, ssh
 from gekong.remote import helper
 
 
@@ -31,6 +31,11 @@ def test_mirror_path_mapping(home):
     for bad in ("", "-oProxyCommand=x", "a/b", "a b", ".."):
         with pytest.raises(ValueError):
             paths.check_host(bad)
+
+
+def test_bare_gekong_prints_help(capsys):
+    assert cli_gekong.main([]) == 0
+    assert "gekong up HOST" in capsys.readouterr().out
 
 
 def test_ssh_destination_parsing():
@@ -102,6 +107,20 @@ def test_uninstall_keeps_permissions_the_user_already_had():
     merged, owned = setup_claude.merge(existing, "/bin/gekong-hook", "/m")
     assert "Bash(gekong run:*)" not in owned["allow"] and "Bash(ssh:*)" not in owned["ask"]
     assert setup_claude.unmerge(merged, owned) == existing
+
+
+def test_gekong_ssh_asks_first():
+    # It forwards arbitrary ssh options, so pre-approving it would pre-approve port forwards.
+    assert "Bash(gekong ssh:*)" in setup_claude.ASK and "Bash(gekong ssh:*)" not in setup_claude.ALLOW
+
+
+def test_reinstall_moves_entries_an_older_install_added():
+    old_allow = [*setup_claude.ALLOW, "Bash(gekong ssh:*)"]
+    settings = {"permissions": {"allow": ["Bash(ls:*)", *old_allow]}}
+    merged, owned = setup_claude.merge(settings, "/bin/gekong-hook", "/m", {"allow": old_allow})
+    assert "Bash(gekong ssh:*)" not in merged["permissions"]["allow"]
+    assert "Bash(gekong ssh:*)" in merged["permissions"]["ask"]
+    assert setup_claude.unmerge(merged, owned) == {"permissions": {"allow": ["Bash(ls:*)"]}}
 
 
 def test_skill_link_only_replaces_its_own(tmp_path, monkeypatch):

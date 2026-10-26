@@ -27,11 +27,14 @@ from . import paths
 HOOK_MARK = "gekong-hook"
 PRE_MATCHER = "Read|Edit|Write|MultiEdit|NotebookEdit|Grep|Glob"
 POST_MATCHER = "Edit|Write|MultiEdit|NotebookEdit"
-ALLOW = ["Bash(gekong run:*)", "Bash(gekong job:*)", "Bash(gekong wait:*)", "Bash(gekong ssh:*)",
+ALLOW = ["Bash(gekong run:*)", "Bash(gekong job:*)", "Bash(gekong wait:*)",
          "Bash(gekong status:*)", "Bash(gekong ps:*)", "Bash(gekong tail:*)",
          "mcp__gekong__Grep", "mcp__gekong__Glob"]
 # `gekong up` may need 2FA and the skill says to hand it to the user; the rest change state.
-ASK = ["Bash(ssh:*)", "Bash(gekong up:*)", "Bash(gekong down:*)", "Bash(gekong kill:*)", "Bash(gekong setup:*)"]
+# `gekong ssh` passes any ssh option through (-L/-R/-D forwards, -O exit, -o ...), so it is
+# plain ssh as far as permissions go.
+ASK = ["Bash(ssh:*)", "Bash(gekong ssh:*)", "Bash(gekong up:*)", "Bash(gekong down:*)",
+       "Bash(gekong kill:*)", "Bash(gekong setup:*)"]
 
 
 def claude_dir() -> Path:
