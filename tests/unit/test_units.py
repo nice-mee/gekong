@@ -3,9 +3,11 @@ import fcntl
 import hashlib
 import json
 import os
+import socket
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 
 import pytest
@@ -149,6 +151,26 @@ def test_home_is_private(home):
     os.chmod(home, 0o755)  # created by an older version
     paths.ensure_private(paths.runs_dir())
     assert stat.S_IMODE(home.stat().st_mode) == 0o700
+
+
+def test_clear_stale_socket_spares_live_masters(monkeypatch):
+    d = tempfile.mkdtemp(dir="/tmp")  # short: AF_UNIX paths are limited to ~104 bytes
+    path = os.path.join(d, "sock")
+    monkeypatch.setattr(ssh, "control_path", lambda host, extra=(): path)
+    assert not ssh.clear_stale_socket("h")  # nothing there
+
+    live = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    live.bind(path)
+    live.listen()
+    assert not ssh.clear_stale_socket("h") and os.path.exists(path)
+    live.close()  # the socket file outlives its listener, as after a SIGKILLed master
+    assert ssh.clear_stale_socket("h") and not os.path.exists(path)
+
+    with open(path, "w"):  # not a socket: leave it for ssh to complain about
+        pass
+    assert not ssh.clear_stale_socket("h") and os.path.exists(path)
+    os.unlink(path)
+    os.rmdir(d)
 
 
 def test_pinned_base_survives_until_its_write_back(home):

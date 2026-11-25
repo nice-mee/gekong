@@ -71,6 +71,8 @@ def cmd_up(a) -> int:
         print(f"gekong: already connected to {host}")
     else:
         paths.ensure_private(paths.ctl_dir())
+        if ssh.clear_stale_socket(host):
+            print(f"gekong: removed a stale socket left by an earlier connection to {host}", file=sys.stderr)
         rc = subprocess.call(["ssh", *ssh.base_opts(), "-o", "ControlMaster=yes", "-o", "ControlPersist=yes",
                               "-o", "ServerAliveInterval=30", "-o", "ServerAliveCountMax=4",
                               "-N", "-f", "--", host])
@@ -108,6 +110,7 @@ def cmd_down(a) -> int:
             _close(host)
             print(f"gekong: disconnected from {host}")
         else:
+            ssh.clear_stale_socket(host)
             print(f"gekong: {host} was not connected")
         _record(host).unlink(missing_ok=True)
     return 0
