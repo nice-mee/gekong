@@ -1,5 +1,9 @@
 """M1: one login, many reuses; never a login outside `gekong up`."""
+import os
+import re
+import signal
 import subprocess
+import time
 
 from conftest import BIN, HOST
 
@@ -32,6 +36,46 @@ def test_never_logs_in_without_master(env):
         r = env.run(*argv)
         assert r.returncode == 255, (argv, r.stdout, r.stderr)
         assert f"gekong up {HOST}" in r.stderr
+
+
+def _kill_master(env):
+    """SIGKILL the master, as a power loss would: its socket file stays behind."""
+    r = subprocess.run(["ssh", "-F", str(env.config), "-o", f"ControlPath={env.home}/ctl/%C", "-O", "check", HOST],
+                       capture_output=True, text=True)
+    pid = int(re.search(r"pid=(\d+)", r.stderr).group(1))
+    os.kill(pid, signal.SIGKILL)
+    for _ in range(50):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.1)
+    sockets = list((env.home / "ctl").iterdir())
+    assert len(sockets) == 1, sockets
+    return sockets[0]
+
+
+def _masters(env):
+    r = subprocess.run(["pgrep", "-f", f"ControlPath={env.home}/ctl/"], capture_output=True, text=True)
+    return r.stdout.split()
+
+
+def test_up_after_master_died_without_cleanup(up):
+    stale = _kill_master(up)
+    r = up.run("gekong", "status", HOST)
+    assert r.returncode == 1 and "down" in r.stdout
+    r = up.run("gekong", "up", HOST)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "stale socket" in r.stderr and "already exists" not in r.stderr
+    assert stale.is_socket() and len(_masters(up)) == 1
+    r = up.run("gekong", "ssh", HOST, "echo", "back")
+    assert r.returncode == 0 and r.stdout == "back\n", r.stderr
+
+
+def test_down_clears_a_stale_socket(up):
+    stale = _kill_master(up)
+    r = up.run("gekong", "down", HOST)
+    assert "was not connected" in r.stdout and not stale.exists()
 
 
 def test_gk_ssh_with_rsync_and_user_flag(up, tmp_path):

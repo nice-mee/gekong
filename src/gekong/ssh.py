@@ -7,6 +7,8 @@ installed and keeps nothing behind.
 import json
 import os
 import signal
+import socket
+import stat
 import subprocess
 import sys
 import threading
@@ -90,6 +92,39 @@ def master_alive(host: str) -> bool:
     r = subprocess.run(["ssh", *base_opts(), "-O", "check", "--", host],
                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return r.returncode == 0
+
+
+def clear_stale_socket(host: str) -> bool:
+    """Remove `host`'s master socket if a master that died without cleaning up
+    (SIGKILL, power loss, a hard shutdown) left it behind; return True if it did.
+
+    ssh clears stale sockets itself only under ControlMaster=auto. `gekong up`
+    uses yes, and a leftover socket then makes the new master log in anyway,
+    give up on multiplexing ("ControlSocket ... already exists") and linger in
+    the background, unusable. Like ssh, only a socket that refuses connections
+    counts as stale, so a live master is never cut off.
+    """
+    path = control_path(host)
+    try:
+        if not stat.S_ISSOCK(os.lstat(path).st_mode):
+            return False
+    except FileNotFoundError:
+        return False
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        s.connect(path)
+        return False
+    except ConnectionRefusedError:
+        pass
+    except OSError:
+        return False
+    finally:
+        s.close()
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+    return True
 
 
 def require_master(host: str) -> None:
